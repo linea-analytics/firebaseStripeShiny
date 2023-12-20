@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-This repo shows how to implement a subscription service (SaaS) with R **Shiny**, **Firebase**, and **Stripe**.
+This repo shows how to implement a subscription service (SaaS) with R **Shiny**, **Firebase**, and **Stripe**, using the R library `firebaseStripeShiny`.
 
 ### Pre-requisites:
 - Familiarity with [R](https://www.r-project.org/) & [Shiny](https://shiny.posit.co/)
