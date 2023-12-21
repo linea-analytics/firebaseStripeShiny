@@ -1,141 +1,196 @@
-#' Get All Plans from Stripe API
+#' Make an API Request to Stripe
 #'
-#' This function retrieves all the plans from the Stripe API.
-#' It requires a secret key for authentication.
+#' This function makes a GET request to a specified Stripe API endpoint using provided query parameters and authentication details. 
+#' It is a helper function to interact with the Stripe API.
 #'
-#' @param secret_key A string containing the secret key for Stripe API authentication.
+#' @param endpoint A string specifying the API endpoint to be accessed.
+#' @param query_list A list of query parameters to be included in the request.
+#' @param secret_key A string representing the Stripe secret key for authentication.
+#' @param api_base_url A string specifying the base URL of the Stripe API. Default is 'https://api.stripe.com/v1'.
 #'
-#' @return An object of class `response` representing the API response.
+#' @return A response object from the Stripe API, or NULL in case of an error.
+#'
+#' @examples
+#' \dontrun{
+#'   response <- make_api_request("/customers",
+#'                               list(email = "customer@example.com"),
+#'                               "your_secret_key")
+#' }
+#'
+#' @importFrom httr GET content authenticate
 #' @export
-get_all_plans = function(secret_key) {
-  res = GET(url = 'https://api.stripe.com/v1/plans',
-            authenticate(user = secret_key,
-                         password = ''))
-  
-  return(res)
-}
+make_api_request <-
+  function(endpoint,
+           query_list,
+           secret_key,
+           api_base_url = 'https://api.stripe.com/v1') {
+    response <- tryCatch({
+      httr::content(httr::GET(
+        url = paste0(api_base_url, endpoint),
+        query = query_list,
+        authenticate(user = secret_key, password = '')
+      ))
+    }, error = function(e) {
+      NULL  # Handle error appropriately
+    })
+    return(response)
+  }
 
-#' Retrieve and Format Plans Data from Stripe API
+#' Retrieve and Format Stripe Plans Data
 #'
-#' This function fetches all plans from the Stripe API using the `get_all_plans` function
-#' and formats the data into a tabular structure. It requires a secret key for authentication.
-#' If no data is found, it displays an error message from the API response.
+#' This function fetches plans data from Stripe using the `make_api_request` helper function and formats it into a data frame. 
+#' It provides a structured view of the plans available in Stripe.
 #'
-#' @param secret_key A string containing the secret key for Stripe API authentication.
+#' @param secret_key A string representing the Stripe secret key for authentication.
 #'
-#' @return A data frame containing the plans data with columns: amount, currency, and period.
-#'         If no plans data is found, an informative message is displayed.
+#' @return A data frame containing Stripe plans data. 
+#' Each row represents a plan with fields like amount, currency, price_id, product_id, and period. 
+#' Returns NULL if no data is found or in case of an error.
+#'
+#' @examples
+#' \dontrun{
+#'   plans <- plans_table("your_secret_key")
+#'   print(plans)
+#' }
+#'
 #' @importFrom dplyr %>%
-#' @importFrom httr content
 #' @export
-plans_table = function(secret_key) {
-  plans = get_all_plans(secret_key)
-  plans_data = content(plans)$data
+plans_table <- function(secret_key) {
+  plans_response <- make_api_request('/plans', list(), secret_key)
   
-  if (is.null(plans_data)) {
-    message('Plans data not found. Stripe API response message:',
-            content(plans)$error$message)
-  } else{
-    table = lapply(plans_data, function(plan) {
-      row = c(
-        amount = plan$amount,
-        currency = plan$currency,
-        period = paste(plan$interval_count, plan$interval)
-      )
-      
-      return(row)
-      
-    }) %>%
-      Reduce(f = rbind) %>%
-      data.frame(row.names = NULL)
-    
-    return(table)
-    
+  # Check if the API response is valid and contains data
+  if (is.null(plans_response) || length(plans_response$data) == 0) {
+    message('Plans data not found or an error occurred during the API request.')
+    return(NULL)
   }
-}
-
-#' Retrieve Customer Data by Email from Stripe API
-#'
-#' This function fetches customer data from the Stripe API based on the provided email address.
-#' It requires an email address and a secret key for authentication.
-#'
-#' @param email The email address of the customer to be retrieved.
-#' @param secret_key A string containing the secret key for Stripe API authentication.
-#'
-#' @return An object of class `response` representing the API response, which contains
-#'         the customer data if found, or an error message otherwise.
-#' @importFrom httr GET
-#' @export
-get_customer_by_email = function(email, secret_key) {
-  res = GET(
-    url = 'https://api.stripe.com/v1/customers',
-    query = list(email = email),
-    authenticate(user = secret_key,
-                 password = '')
-  )
   
-  return(res)
-}
-
-#' Retrieve Customer Subscription Information by ID from Stripe API
-#'
-#' This function fetches subscription information for a specific customer from the Stripe API.
-#' It requires a customer ID and a secret key for authentication.
-#'
-#' @param secret_key A string containing the secret key for Stripe API authentication.
-#' @param customer_id The unique identifier of the customer whose subscription information is to be retrieved.
-#'
-#' @return An object of class `response` representing the API response, which contains
-#'         the subscription information for the given customer ID.
-#' @importFrom httr GET
-#' @export
-get_customer_sub_by_id = function(secret_key, customer_id) { #get subscription information by customer id
-  res_sub = GET(
-    url = 'https://api.stripe.com/v1/subscriptions',
-    query = list(customer = customer_id),
-    authenticate(user = secret_key,
-                 password = '')
-  )
-  return(res_sub)
-}
-
-#' Check if User Has an Active or Trialing Plan Based on Email
-#'
-#' This function checks if a user, identified by their email, has an active or trialing
-#' subscription plan in Stripe. It first retrieves the customer's ID based on their email,
-#' then fetches their subscription details to determine the status and product of the subscription.
-#'
-#' @param email The email address of the user.
-#' @param secret_key A string containing the secret key for Stripe API authentication.
-#'
-#' @return A list containing a boolean field `has_plan` indicating whether the user has an
-#'         active or trialing plan, and `content_sub_prod` which is the product associated
-#'         with the subscription. Returns `FALSE` if the user does not have an active or
-#'         trialing plan, or if the customer ID is not found.
-#' @importFrom httr content
-#' @export
-user_has_plan_prod = function(email, secret_key) {
+  # Processing and formatting the data
+  plans_data <- plans_response$data
+  table <- lapply(plans_data, function(plan) {
+    row <- c(
+      amount = plan$amount,
+      currency = plan$currency,
+      price_id = plan$id,
+      product_id = plan$product,
+      period = paste(plan$interval_count, plan$interval)
+    )
+    return(row)
+  }) %>%
+    do.call(rbind, .) %>%
+    data.frame(stringsAsFactors = FALSE)
   
-  res_cust = get_customer_by_email(email, secret_key)
-  customer_id <- NA
-  tryCatch({
-    customer_id <- content(res_cust)$data[[1]]$id
-  }, error = function(e) {
-    # customer_id remains NA
-  })
-  if (is.na(customer_id)) {
+  return(table)
+}
+
+#' Retrieve Customer and Subscription Data from Stripe
+#'
+#' This function fetches customer data based on the email provided and retrieves associated subscription data using the Stripe API.
+#'
+#' @param email A string representing the customer's email.
+#' @param secret_key A string representing the Stripe secret key for authentication.
+#'
+#' @return A list containing two elements: `res_sub` (subscription data) and `res_cus` (customer data). 
+#' Returns NULL if no data is found or in case of an error.
+#'
+#' @examples
+#' \dontrun{
+#'   user_data <- get_user("customer@example.com", "your_secret_key")
+#'   print(user_data)
+#' }
+#'
+#' @export
+get_user <- function(email, secret_key) {
+  # Retrieve customer data
+  res_cus <-
+    make_api_request('/customers', list(email = email), secret_key)
+  if (is.null(res_cus) || length(res_cus$data) == 0) {
+    return(NULL)  # Or handle error appropriately
+  }
+  customer_id <- res_cus$data[[1]]$id
+  
+  # Retrieve subscription data
+  res_sub <-
+    make_api_request('/subscriptions', list(customer = customer_id), secret_key)
+  if (is.null(res_sub)) {
+    return(NULL)  # Or handle error appropriately
+  }
+  
+  return(list('res_sub' = res_sub, 'res_cus' = res_cus))
+}
+
+#' Check Customer's Subscription Status
+#'
+#' This function checks whether a given customer, identified by their email, has any active subscription in Stripe.
+#'
+#' @param email A string representing the customer's email.
+#' @param secret_key A string representing the Stripe secret key for authentication.
+#'
+#' @return A logical value: TRUE if the customer has an active subscription, FALSE otherwise.
+#'
+#' @examples
+#' \dontrun{
+#'   subscription_status <- has_plan("customer@example.com", "your_secret_key")
+#'   print(subscription_status)
+#' }
+#'
+#' @export
+has_plan <- function(email, secret_key) {
+  user_data <- get_user(email, secret_key)
+  if (is.null(user_data) || length(user_data$res_sub$data) == 0) {
     return(FALSE)
-  } else {
-    res_sub = get_customer_sub_by_id(customer_id, secret_key)
-    #get status of subscription
-    content_sub_st <- content(res_sub)$data[[1]]$status 
-    #get product of subscription - used to hide certain parts in your app (this can also be price id if there is 1 product: content(res_sub)$data[[1]]$price$id, see https://stripe.com/docs/api/subscriptions/object)
-    content_sub_prod <-content(res_sub)$data[[1]]$plan$product 
-    #filter on status plus return product to use in your app
-    if (content_sub_st == "active" || content_sub_st == "trialing") {
-      return(list(has_plan = TRUE, content_sub_prod = content_sub_prod))
-    } else {
-      return(FALSE)
-    }
   }
+  return(TRUE)
+}
+
+#' Check if Customer is Subscribed to a Specific Product
+#'
+#' This function determines whether a customer, identified by their email, is subscribed to a specific product in Stripe.
+#'
+#' @param email A string representing the customer's email.
+#' @param secret_key A string representing the Stripe secret key for authentication.
+#' @param product_id A string representing the product ID to check against the customer's subscription.
+#'
+#' @return A logical value: TRUE if the customer is subscribed to the specified product, FALSE otherwise.
+#'
+#' @examples
+#' \dontrun{
+#'   is_subscribed_to_product <- has_plan_product("customer@example.com", "your_secret_key", "prod_example")
+#'   print(is_subscribed_to_product)
+#' }
+#'
+#' @export
+has_plan_product <- function(email, secret_key, product_id) {
+  user_data <- get_user(email, secret_key)
+  if (is.null(user_data) || length(user_data$res_sub$data) == 0) {
+    return(FALSE)
+  }
+  user_product_id <- user_data$res_sub$data[[1]]$plan$product
+  return(product_id == user_product_id)
+}
+
+
+#' Check if Customer is Subscribed with a Specific Price ID
+#'
+#' This function checks whether a customer, identified by their email, is subscribed with a specific price ID in Stripe.
+#'
+#' @param email A string representing the customer's email.
+#' @param secret_key A string representing the Stripe secret key for authentication.
+#' @param price_id A string representing the price ID to check against the customer's subscription.
+#'
+#' @return A logical value: TRUE if the customer is subscribed with the specified price ID, FALSE otherwise.
+#'
+#' @examples
+#' \dontrun{
+#'   is_subscribed_to_price <- has_plan_price("customer@example.com", "your_secret_key", "price_example")
+#'   print(is_subscribed_to_price)
+#' }
+#'
+#' @export
+has_plan_price <- function(email, secret_key, price_id) {
+  user_data <- get_user(email, secret_key)
+  if (is.null(user_data) || length(user_data$res_sub$data) == 0) {
+    return(FALSE)
+  }
+  user_price_id <- user_data$res_sub$data[[1]]$plan$id
+  return(price_id == user_price_id)
 }

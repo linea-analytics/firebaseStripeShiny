@@ -1,2 +1,2 @@
 globalVariables(
-  c('authenticate'))
+  c('authenticate','.'))

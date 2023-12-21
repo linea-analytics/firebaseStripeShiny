@@ -2,19 +2,26 @@
 % Please edit documentation in R/stripe_functions.R
 \name{plans_table}
 \alias{plans_table}
-\title{Retrieve and Format Plans Data from Stripe API}
+\title{Retrieve and Format Stripe Plans Data}
 \usage{
 plans_table(secret_key)
 }
 \arguments{
-\item{secret_key}{A string containing the secret key for Stripe API authentication.}
+\item{secret_key}{A string representing the Stripe secret key for authentication.}
 }
 \value{
-A data frame containing the plans data with columns: amount, currency, and period.
-If no plans data is found, an informative message is displayed.
+A data frame containing Stripe plans data.
+Each row represents a plan with fields like amount, currency, price_id, product_id, and period.
+Returns NULL if no data is found or in case of an error.
 }
 \description{
-This function fetches all plans from the Stripe API using the \code{get_all_plans} function
-and formats the data into a tabular structure. It requires a secret key for authentication.
-If no data is found, it displays an error message from the API response.
+This function fetches plans data from Stripe using the \code{make_api_request} helper function and formats it into a data frame.
+It provides a structured view of the plans available in Stripe.
+}
+\examples{
+\dontrun{
+  plans <- plans_table("your_secret_key")
+  print(plans)
+}
+
 }
